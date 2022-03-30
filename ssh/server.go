@@ -303,7 +303,6 @@ func (s *connection) serverHandshake(config *ServerConfig) (*Permissions, error)
 		}
 
 		// read the next packet
-		packet = nil
 		if packet, err = s.transport.readPacket(); err != nil {
 			return nil, err
 		}
