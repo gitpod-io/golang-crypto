@@ -83,6 +83,7 @@ type ServerConfig struct {
 	// attempts to authenticate with auth method "none".
 	// NoClientAuth must also be set to true for this be used, or
 	// this func is unused.
+	// If the function returns ErrDenied, the connection is terminated.
 	NoClientAuthCallback func(ConnMetadata) (*Permissions, error)
 
 	// MaxAuthTries specifies the maximum number of authentication attempts
@@ -93,6 +94,7 @@ type ServerConfig struct {
 
 	// PasswordCallback, if non-nil, is called when a user
 	// attempts to authenticate using a password.
+	// If the function returns ErrDenied, the connection is terminated.
 	PasswordCallback func(conn ConnMetadata, password []byte) (*Permissions, error)
 
 	// PublicKeyCallback, if non-nil, is called when a client
@@ -103,6 +105,7 @@ type ServerConfig struct {
 	// offered is in fact used to authenticate. To record any data
 	// depending on the public key, store it inside a
 	// Permissions.Extensions entry.
+	// If the function returns ErrDenied, the connection is terminated.
 	PublicKeyCallback func(conn ConnMetadata, key PublicKey) (*Permissions, error)
 
 	// KeyboardInteractiveCallback, if non-nil, is called when
@@ -112,6 +115,7 @@ type ServerConfig struct {
 	// Challenge rounds. To avoid information leaks, the client
 	// should be presented a challenge even if the user is
 	// unknown.
+	// If the function returns ErrDenied, the connection is terminated.
 	KeyboardInteractiveCallback func(conn ConnMetadata, client KeyboardInteractiveChallenge) (*Permissions, error)
 
 	// AuthLogCallback, if non-nil, is called to log all authentication
@@ -462,12 +466,19 @@ func (p *PartialSuccessError) Error() string {
 	return "ssh: authenticated with partial success"
 }
 
-// ErrNoAuth is the error value returned if no
-// authentication method has been passed yet. This happens as a normal
-// part of the authentication loop, since the client first tries
-// 'none' authentication to discover available methods.
-// It is returned in ServerAuthError.Errors from NewServerConn.
-var ErrNoAuth = errors.New("ssh: no auth passed yet")
+var (
+	// ErrDenied can be returned from an authentication callback to inform the
+	// client that access is denied and that no further attempt will be accepted
+	// on the connection.
+	ErrDenied = errors.New("ssh: access denied")
+
+	// ErrNoAuth is the error value returned if no
+	// authentication method has been passed yet. This happens as a normal
+	// part of the authentication loop, since the client first tries
+	// 'none' authentication to discover available methods.
+	// It is returned in ServerAuthError.Errors from NewServerConn.
+	ErrNoAuth = errors.New("ssh: no auth passed yet")
+)
 
 // BannerError is an error that can be returned by authentication handlers in
 // ServerConfig to send a banner message to the client.
@@ -773,6 +784,15 @@ userAuthLoop:
 
 		if authErr == nil {
 			break userAuthLoop
+		}
+
+		if errors.Is(authErr, ErrDenied) {
+			var failureMsg userAuthFailureMsg
+			if err := s.transport.writePacket(Marshal(failureMsg)); err != nil {
+				return nil, err
+			}
+
+			return nil, nil
 		}
 
 		var failureMsg userAuthFailureMsg
