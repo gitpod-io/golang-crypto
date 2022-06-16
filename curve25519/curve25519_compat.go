@@ -11,7 +11,7 @@ import (
 	"errors"
 	"strconv"
 
-	"golang.org/x/crypto/curve25519/internal/field"
+	"github.com/gitpod-io/golang-crypto/curve25519/internal/field"
 )
 
 func scalarMult(dst, scalar, point *[32]byte) {
