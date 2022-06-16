@@ -76,6 +76,10 @@ type ServerConfig struct {
 	// to 6.
 	MaxAuthTries int
 
+	// NoClientAuthCallback, if non-nil, is called when a user
+	// attempts to authenticate using only ConnMetadata.
+	NoClientAuthCallback func(conn ConnMetadata) (*Permissions, error)
+
 	// PasswordCallback, if non-nil, is called when a user
 	// attempts to authenticate using a password.
 	PasswordCallback func(conn ConnMetadata, password []byte) (*Permissions, error)
@@ -229,7 +233,7 @@ func (s *connection) serverHandshake(config *ServerConfig) (*Permissions, error)
 		return nil, errors.New("ssh: server has no host keys")
 	}
 
-	if !config.NoClientAuth && config.PasswordCallback == nil && config.PublicKeyCallback == nil &&
+	if !config.NoClientAuth && config.NoClientAuthCallback == nil && config.PasswordCallback == nil && config.PublicKeyCallback == nil &&
 		config.KeyboardInteractiveCallback == nil && (config.GSSAPIWithMICConfig == nil ||
 		config.GSSAPIWithMICConfig.AllowLogin == nil || config.GSSAPIWithMICConfig.Server == nil) {
 		return nil, errors.New("ssh: no authentication methods configured but NoClientAuth is also false")
@@ -456,6 +460,9 @@ userAuthLoop:
 		case "none":
 			if config.NoClientAuth {
 				authErr = nil
+			}
+			if config.NoClientAuthCallback != nil {
+				perms, authErr = config.NoClientAuthCallback(s)
 			}
 
 			// allow initial attempt of 'none' without penalty
