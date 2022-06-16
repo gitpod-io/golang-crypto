@@ -10,7 +10,7 @@ import (
 	"runtime"
 	"testing"
 
-	"golang.org/x/crypto/sha3"
+	"github.com/gitpod-io/golang-crypto/sha3"
 )
 
 var sink byte
